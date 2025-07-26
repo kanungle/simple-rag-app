@@ -1,103 +1,258 @@
-import Image from "next/image";
+'use client'
+
+import { useState, useRef, useEffect } from 'react'
+import { 
+  ArrowUpTrayIcon, 
+  PaperAirplaneIcon, 
+  DocumentTextIcon, 
+  ChatBubbleLeftRightIcon,
+  ArrowPathIcon 
+} from '@heroicons/react/24/outline'
+import axios from 'axios'
+
+const API_BASE_URL = 'http://localhost:8000'
+
+interface Message {
+  role: 'user' | 'assistant'
+  content: string
+  sources?: string[]
+}
+
+interface Document {
+  name: string
+  chunks: number
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [messages, setMessages] = useState<Message[]>([])
+  const [inputMessage, setInputMessage] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [documents, setDocuments] = useState<Document[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  useEffect(() => {
+    fetchDocuments()
+  }, [])
+
+  const fetchDocuments = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/documents`)
+      setDocuments(response.data.documents.map((name: string) => ({ name, chunks: 0 })))
+    } catch (error) {
+      console.error('Error fetching documents:', error)
+    }
+  }
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsUploading(true)
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/upload-pdf`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      
+      alert(`Successfully uploaded ${file.name}! Created ${response.data.chunks} chunks.`)
+      fetchDocuments()
+    } catch (error: any) {
+      alert(`Error uploading file: ${error.response?.data?.detail || error.message}`)
+    } finally {
+      setIsUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  const sendMessage = async () => {
+    if (!inputMessage.trim() || isLoading) return
+
+    const userMessage: Message = { role: 'user', content: inputMessage.trim() }
+    setMessages(prev => [...prev, userMessage])
+    setInputMessage('')
+    setIsLoading(true)
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/chat`, {
+        message: userMessage.content,
+        conversation_history: messages.slice(-5).map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }))
+      })
+
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: response.data.response,
+        sources: response.data.sources
+      }
+
+      setMessages(prev => [...prev, assistantMessage])
+    } catch (error: any) {
+      const errorMessage: Message = {
+        role: 'assistant',
+        content: `Error: ${error.response?.data?.detail || 'Failed to get response from server'}`
+      }
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b p-4">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <ChatBubbleLeftRightIcon className="h-6 w-6 text-blue-600" />
+            <h1 className="text-xl font-semibold text-gray-900">RAG Chat</h1>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              onChange={handleFileUpload}
+              className="hidden"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isUploading ? (
+                <ArrowPathIcon className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowUpTrayIcon className="h-4 w-4" />
+              )}
+              <span>{isUploading ? 'Uploading...' : 'Upload PDF'}</span>
+            </button>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </header>
+
+      <div className="flex-1 flex max-w-6xl mx-auto w-full">
+        {/* Sidebar */}
+        <aside className="w-64 bg-white shadow-sm border-r p-4">
+          <h2 className="text-lg font-medium text-gray-900 mb-4">Documents</h2>
+          <div className="space-y-2">
+            {documents.length === 0 ? (
+              <p className="text-gray-500 text-sm">No documents uploaded yet</p>
+            ) : (
+              documents.map((doc, index) => (
+                <div key={index} className="flex items-center space-x-2 p-2 bg-gray-50 rounded-lg">
+                  <DocumentTextIcon className="h-4 w-4 text-gray-600" />
+                  <span className="text-sm text-gray-900 truncate" title={doc.name}>
+                    {doc.name}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </aside>
+
+        {/* Main Chat Area */}
+        <main className="flex-1 flex flex-col">
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.length === 0 ? (
+              <div className="text-center text-gray-500 mt-8">
+                <ChatBubbleLeftRightIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <h3 className="text-lg font-medium mb-2">Welcome to RAG Chat</h3>
+                <p>Upload a PDF document and start asking questions about its content.</p>
+              </div>
+            ) : (
+              messages.map((message, index) => (
+                <div
+                  key={index}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-3xl p-4 rounded-lg ${
+                      message.role === 'user'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white border shadow-sm'
+                    }`}
+                  >
+                    <div className="whitespace-pre-wrap">{message.content}</div>
+                    {message.sources && message.sources.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <p className="text-xs text-gray-500 mb-1">Sources:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {message.sources.map((source, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded"
+                            >
+                              {source}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-white border shadow-sm p-4 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <ArrowPathIcon className="h-4 w-4 animate-spin text-gray-500" />
+                    <span className="text-gray-500">Thinking...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input Area */}
+          <div className="border-t bg-white p-4">
+            <div className="flex space-x-2">
+              <textarea
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask a question about your documents..."
+                className="flex-1 resize-none border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                rows={2}
+                disabled={isLoading}
+              />
+              <button
+                onClick={sendMessage}
+                disabled={!inputMessage.trim() || isLoading}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+              >
+                <PaperAirplaneIcon className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
     </div>
-  );
+  )
 }
