@@ -4,24 +4,27 @@ A Retrieval Augmented Generation (RAG) chat application that allows users to upl
 
 ## Features
 
-- 📄 **PDF Upload**: Upload PDF documents to build your knowledge base
+- 📄 **PDF Upload**: Upload PDF documents to build your knowledge base with progress tracking
 - 💬 **Interactive Chat**: Ask questions about your uploaded documents
 - 🔍 **Source Attribution**: See which documents were used to answer your questions
 - 🚀 **Real-time Processing**: Fast document ingestion and retrieval
 - 🎯 **Semantic Search**: Find relevant information using vector similarity
+- 📊 **Status Indicators**: Real-time backend and database connection status
+- 🔄 **Progress Tracking**: Visual upload and processing progress bars
+- ⚡ **Health Monitoring**: Automatic system health checks every 30 seconds
 
 ## Architecture
 
 - **Frontend**: Next.js 15 with TypeScript and Tailwind CSS
-- **Backend**: FastAPI with Python
-- **Vector Database**: Qdrant (local instance)
-- **Embeddings**: sentence-transformers (all-MiniLM-L6-v2)
-- **LLM**: OpenAI GPT-3.5-turbo
+- **Backend**: FastAPI with Python 3.13.0
+- **Vector Database**: Qdrant (local Docker instance)
+- **Embeddings**: OpenAI text-embedding-ada-002 (1536 dimensions)
+- **LLM**: OpenAI GPT models
 - **PDF Processing**: PyPDF2
 
 ## Prerequisites
 
-- Python 3.8+
+- Python 3.12+ (3.13.0 recommended)
 - Node.js 18+
 - Docker (for Qdrant)
 - OpenAI API key

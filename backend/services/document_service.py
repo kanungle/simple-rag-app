@@ -2,7 +2,7 @@ import os
 import uuid
 from typing import List, Dict
 import PyPDF2
-from sentence_transformers import SentenceTransformer
+import openai
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 import logging
@@ -16,7 +16,7 @@ class DocumentService:
             port=int(os.getenv("QDRANT_PORT", 6333))
         )
         self.collection_name = os.getenv("COLLECTION_NAME", "documents")
-        self.embedding_model = SentenceTransformer(os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2"))
+        self.openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.chunk_size = int(os.getenv("CHUNK_SIZE", 1000))
         self.chunk_overlap = int(os.getenv("CHUNK_OVERLAP", 200))
         
@@ -30,7 +30,7 @@ class DocumentService:
                 self.qdrant_client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config=VectorParams(
-                        size=384,  # all-MiniLM-L6-v2 embedding size
+                        size=1536,  # OpenAI text-embedding-ada-002 size
                         distance=Distance.COSINE
                     )
                 )
@@ -83,6 +83,24 @@ class DocumentService:
             start = end - self.chunk_overlap
             
         return chunks
+            
+    def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings using OpenAI"""
+        try:
+            # Filter out empty texts
+            valid_texts = [text.strip() for text in texts if text.strip()]
+            
+            if not valid_texts:
+                raise ValueError("No valid text chunks provided for embedding generation")
+            
+            response = self.openai_client.embeddings.create(
+                model="text-embedding-ada-002",
+                input=valid_texts
+            )
+            return [embedding.embedding for embedding in response.data]
+        except Exception as e:
+            logger.error(f"Error generating embeddings: {str(e)}")
+            raise
 
     async def process_pdf(self, pdf_path: str, filename: str) -> Dict:
         """Process PDF file and store embeddings in Qdrant"""
@@ -90,24 +108,40 @@ class DocumentService:
             # Extract text from PDF
             text = self.extract_text_from_pdf(pdf_path)
             
+            if not text.strip():
+                raise ValueError("No text could be extracted from the PDF")
+            
             # Split into chunks
             chunks = self.chunk_text(text)
             
+            if not chunks:
+                raise ValueError("No valid text chunks could be created from the PDF")
+            
+            # Filter out empty chunks
+            valid_chunks = [chunk for chunk in chunks if chunk.strip()]
+            
+            if not valid_chunks:
+                raise ValueError("No valid text chunks after filtering")
+            
             # Generate embeddings
-            embeddings = self.embedding_model.encode(chunks)
+            embeddings = self.get_embeddings(valid_chunks)
+            
+            # Ensure we have the same number of chunks and embeddings
+            if len(valid_chunks) != len(embeddings):
+                raise ValueError(f"Mismatch between chunks ({len(valid_chunks)}) and embeddings ({len(embeddings)})")
             
             # Prepare points for Qdrant
             points = []
-            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            for i, (chunk, embedding) in enumerate(zip(valid_chunks, embeddings)):
                 point_id = str(uuid.uuid4())
                 point = PointStruct(
                     id=point_id,
-                    vector=embedding.tolist(),
+                    vector=embedding,
                     payload={
                         "text": chunk,
                         "source": filename,
                         "chunk_index": i,
-                        "total_chunks": len(chunks)
+                        "total_chunks": len(valid_chunks)
                     }
                 )
                 points.append(point)
@@ -118,11 +152,11 @@ class DocumentService:
                 points=points
             )
             
-            logger.info(f"Successfully processed {filename}: {len(chunks)} chunks")
+            logger.info(f"Successfully processed {filename}: {len(valid_chunks)} chunks")
             
             return {
                 "filename": filename,
-                "chunks": len(chunks),
+                "chunks": len(valid_chunks),
                 "text_length": len(text)
             }
             
@@ -134,12 +168,13 @@ class DocumentService:
         """Search for similar text chunks"""
         try:
             # Generate query embedding
-            query_embedding = self.embedding_model.encode([query])[0]
+            query_embeddings = self.get_embeddings([query])
+            query_embedding = query_embeddings[0]
             
             # Search in Qdrant
             search_results = self.qdrant_client.search(
                 collection_name=self.collection_name,
-                query_vector=query_embedding.tolist(),
+                query_vector=query_embedding,
                 limit=limit,
                 with_payload=True
             )

@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 from typing import List
 import logging
+from datetime import datetime
 
 from services.document_service import DocumentService
 from services.chat_service import ChatService
@@ -48,6 +49,24 @@ async def startup_event():
 @app.get("/")
 async def root():
     return {"message": "RAG Chat API is running"}
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint to verify system status"""
+    try:
+        # Check Qdrant connection
+        collections = document_service.qdrant_client.get_collections()
+        qdrant_status = "connected"
+    except Exception as e:
+        logger.error(f"Qdrant health check failed: {str(e)}")
+        qdrant_status = "disconnected"
+    
+    return {
+        "status": "healthy",
+        "backend_status": "connected",
+        "qdrant_status": qdrant_status,
+        "timestamp": datetime.now().isoformat()
+    }
 
 @app.post("/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):
