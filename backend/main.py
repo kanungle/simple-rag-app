@@ -42,6 +42,19 @@ class ChatResponse(BaseModel):
     sources: List[str]
     evaluation: dict = None
 
+class DocumentMetadataUpdate(BaseModel):
+    metadata: dict
+
+class DocumentResponse(BaseModel):
+    name: str
+    filename: str
+    file_size: int
+    page_count: int
+    total_chunks: int
+    processed_at: str
+    text_length: int
+    actual_chunks: int
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize Qdrant collection on startup"""
@@ -124,10 +137,51 @@ async def delete_document(document_name: str):
     """Delete a document and its chunks"""
     try:
         result = await document_service.delete_document(document_name)
-        return {"message": f"Document {document_name} deleted successfully", "deleted_count": result}
+        return {
+            "message": f"Document {document_name} deleted successfully", 
+            "deleted_chunks": result["deleted_chunks"],
+            "deleted_at": result["deleted_at"],
+            "document_metadata": result["document_metadata"]
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error deleting document: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error deleting document: {str(e)}")
+
+@app.get("/documents/{document_name}")
+async def get_document(document_name: str):
+    """Get detailed information about a specific document"""
+    try:
+        document = await document_service.get_document(document_name)
+        if not document:
+            raise HTTPException(status_code=404, detail=f"Document {document_name} not found")
+        return document
+    except Exception as e:
+        logger.error(f"Error getting document: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting document: {str(e)}")
+
+@app.put("/documents/{document_name}/metadata")
+async def update_document_metadata(document_name: str, request: DocumentMetadataUpdate):
+    """Update metadata for a document"""
+    try:
+        result = await document_service.update_document_metadata(document_name, request.metadata)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating document metadata: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating document metadata: {str(e)}")
+
+@app.get("/documents/statistics/overview")
+async def get_document_statistics():
+    """Get overall statistics about all documents"""
+    try:
+        stats = await document_service.get_document_statistics()
+        return stats
+    except Exception as e:
+        logger.error(f"Error getting document statistics: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting document statistics: {str(e)}")
 
 @app.get("/evaluation/summary")
 async def get_evaluation_summary():
