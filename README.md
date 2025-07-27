@@ -12,6 +12,14 @@ A Retrieval Augmented Generation (RAG) chat application that allows users to upl
 - 📊 **Status Indicators**: Real-time backend and database connection status
 - 🔄 **Progress Tracking**: Visual upload and processing progress bars
 - ⚡ **Health Monitoring**: Automatic system health checks every 30 seconds
+- 📈 **RAG Evaluation**: Comprehensive evaluation system with 5 quality metrics
+  - **Relevance**: How well the response addresses the user's query
+  - **Faithfulness**: Whether the response is grounded in retrieved context
+  - **Completeness**: How thoroughly the response addresses the query
+  - **Clarity**: How clear and well-structured the response is
+  - **Retrieval Quality**: Quality and diversity of retrieved contexts
+- 🎛️ **Metrics Toggle**: Enable/disable evaluation for each chat interaction
+- 📊 **Evaluation Dashboard**: View evaluation summary and trends in the sidebar
 
 ## Architecture
 
