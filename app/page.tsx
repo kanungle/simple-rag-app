@@ -13,7 +13,9 @@ import {
   SignalIcon,
   ClockIcon,
   ChartBarIcon,
-  StarIcon
+  StarIcon,
+  CogIcon,
+  AdjustmentsHorizontalIcon
 } from '@heroicons/react/24/outline'
 import axios from 'axios'
 
@@ -113,6 +115,9 @@ export default function Home() {
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
   const [documentStats, setDocumentStats] = useState<any>(null)
   const [showDocumentDetails, setShowDocumentDetails] = useState(false)
+  const [showChunkingOptions, setShowChunkingOptions] = useState(false)
+  const [useContextualChunking, setUseContextualChunking] = useState(false)  
+  const [contextSize, setContextSize] = useState(100)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -223,8 +228,20 @@ export default function Home() {
       message: 'Uploading file...'
     })
 
+    // Update FormData creation:
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('use_contextual', useContextualChunking.toString())
+    formData.append('context_size', contextSize.toString())
+
+    // Update progress message:
+    setUploadProgress({
+      stage: 'processing',
+      progress: 30,
+      message: useContextualChunking 
+        ? 'Extracting text and preparing contextual chunks...' 
+        : 'Extracting text from PDF...'
+    })
 
     try {
       setUploadProgress({
@@ -468,6 +485,19 @@ export default function Home() {
                 <ChartBarIcon className="h-4 w-4" />
                 <span>Metrics</span>
                 {showEvaluation && <span className="text-xs bg-green-200 px-1 rounded">ON</span>}
+              </button>
+
+              <button
+                onClick={() => setShowChunkingOptions(!showChunkingOptions)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  showChunkingOptions 
+                    ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <AdjustmentsHorizontalIcon className="h-4 w-4" />
+                <span>Chunking</span>
+                {useContextualChunking && <span className="text-xs bg-purple-200 px-1 rounded">CTX</span>}
               </button>
               
               <input
@@ -761,7 +791,7 @@ export default function Home() {
                     ? "Ask a question about your documents..." 
                     : "Connect to backend to start chatting..."
                 }
-                className={`flex-1 resize-none border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:border-transparent text-gray-900 placeholder-gray-500 ${
+                className={`flex-1 resize-none border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:border-transparent text-gray-900 placeholder-gray-700 ${
                   systemStatus.backend === 'connected' 
                     ? 'border-gray-300 focus:ring-blue-500 bg-white' 
                     : 'border-red-300 bg-gray-50 focus:ring-red-500 text-gray-800'
@@ -790,7 +820,7 @@ export default function Home() {
                 <h2 className="text-xl font-semibold text-gray-900">Document Details</h2>
                 <button
                   onClick={() => setShowDocumentDetails(false)}
-                  className="text-gray-600 hover:text-gray-800"
+                  className="text-gray-800 hover:text-gray-900"
                 >
                   <XCircleIcon className="h-6 w-6" />
                 </button>
@@ -880,7 +910,7 @@ export default function Home() {
             <div className="p-6 border-t bg-gray-50 flex justify-end space-x-3">
               <button
                 onClick={() => setShowDocumentDetails(false)}
-                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="px-4 py-2 text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
               >
                 Close
               </button>
@@ -894,6 +924,65 @@ export default function Home() {
               >
                 Delete Document
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chunking Options Panel */}
+      {showChunkingOptions && (
+        <div className="max-w-6xl mx-auto mt-4">
+          <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+              <CogIcon className="h-4 w-4 mr-2" />
+              Chunking Options
+            </h3>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="contextual-chunking"
+                      checked={useContextualChunking}
+                      onChange={(e) => setUseContextualChunking(e.target.checked)}
+                      className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="contextual-chunking" className="ml-2 text-sm font-medium text-gray-900">
+                      Use Contextual Chunking
+                    </label>
+                  </div>
+                </div>
+                
+                {useContextualChunking && (
+                  <div className="flex items-center space-x-2">
+                    <label htmlFor="context-size" className="text-sm text-gray-900 font-medium">
+                      Context Size:
+                    </label>
+                    <input
+                      type="number"
+                      id="context-size"
+                      min="50"
+                      max="300"
+                      step="10"
+                      value={contextSize}
+                      onChange={(e) => setContextSize(parseInt(e.target.value))}
+                      className="w-20 px-3 py-1 text-sm border border-gray-300 rounded focus:ring-purple-500 focus:border-purple-500"
+                    />
+                    <span className="text-sm text-gray-900 font-medium">chars</span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="text-xs text-gray-800">
+                <p className="mb-1">
+                  <strong>Basic Chunking:</strong> Splits documents into overlapping chunks at sentence boundaries.
+                </p>
+                <p>
+                  <strong>Contextual Chunking:</strong> Adds surrounding context and document position information to each chunk for better retrieval accuracy.
+                </p>
+              </div>
             </div>
           </div>
         </div>
