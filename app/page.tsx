@@ -21,6 +21,15 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   sources?: string[]
+  evaluation?: {
+    overall_score: number
+    metrics: {
+      [key: string]: {
+        score: number
+        description: string
+      }
+    }
+  }
 }
 
 interface Document {
@@ -40,6 +49,17 @@ interface UploadProgress {
   message: string
 }
 
+interface EvaluationSummary {
+  total_evaluations: number
+  average_scores: {
+    [key: string]: number
+  }
+  recent_scores: {
+    [key: string]: number
+  }
+  recent_trend: string
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputMessage, setInputMessage] = useState('')
@@ -56,6 +76,8 @@ export default function Home() {
     progress: 0,
     message: ''
   })
+  const [evaluationSummary, setEvaluationSummary] = useState<EvaluationSummary | null>(null)
+  const [showEvaluation, setShowEvaluation] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -70,10 +92,23 @@ export default function Home() {
   useEffect(() => {
     checkSystemStatus()
     fetchDocuments()
+    fetchEvaluationSummary()
     // Check system status every 30 seconds
-    const interval = setInterval(checkSystemStatus, 30000)
+    const interval = setInterval(() => {
+      checkSystemStatus()
+      fetchEvaluationSummary()
+    }, 30000)
     return () => clearInterval(interval)
   }, [])
+
+  const fetchEvaluationSummary = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/evaluation/summary`)
+      setEvaluationSummary(response.data)
+    } catch (error) {
+      console.error('Error fetching evaluation summary:', error)
+    }
+  }
 
   const checkSystemStatus = async () => {
     setSystemStatus(prev => ({ ...prev, backend: 'checking', qdrant: 'checking' }))
@@ -217,10 +252,16 @@ export default function Home() {
       const assistantMessage: Message = {
         role: 'assistant',
         content: response.data.response,
-        sources: response.data.sources
+        sources: response.data.sources,
+        evaluation: response.data.evaluation
       }
 
       setMessages(prev => [...prev, assistantMessage])
+      
+      // Refresh evaluation summary after new response
+      if (response.data.evaluation) {
+        fetchEvaluationSummary()
+      }
     } catch (error: any) {
       const errorMessage: Message = {
         role: 'assistant',
@@ -259,6 +300,18 @@ export default function Home() {
       default:
         return 'bg-blue-500'
     }
+  }
+
+  const getScoreColor = (score: number) => {
+    if (score >= 0.8) return 'text-green-600'
+    if (score >= 0.6) return 'text-yellow-600'
+    return 'text-red-600'
+  }
+
+  const getScoreBgColor = (score: number) => {
+    if (score >= 0.8) return 'bg-green-100'
+    if (score >= 0.6) return 'bg-yellow-100'
+    return 'bg-red-100'
   }
 
   return (
@@ -310,6 +363,18 @@ export default function Home() {
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* Evaluation Toggle Button */}
+              <button
+                onClick={() => setShowEvaluation(!showEvaluation)}
+                className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                  showEvaluation 
+                    ? 'bg-blue-100 text-blue-700 border border-blue-300' 
+                    : 'bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200'
+                }`}
+              >
+                📊 Metrics
+              </button>
+              
               <input
                 ref={fileInputRef}
                 type="file"
@@ -352,22 +417,52 @@ export default function Home() {
 
       <div className="flex-1 flex max-w-6xl mx-auto w-full">
         {/* Sidebar */}
-        <aside className="w-64 bg-white shadow-sm border-r p-4">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Documents</h2>
-          <div className="space-y-2">
-            {documents.length === 0 ? (
-              <p className="text-gray-600 text-sm">No documents uploaded yet</p>
-            ) : (
-              documents.map((doc, index) => (
-                <div key={index} className="flex items-center space-x-2 p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                  <DocumentTextIcon className="h-4 w-4 text-gray-700" />
-                  <span className="text-sm text-gray-900 truncate font-medium" title={doc.name}>
-                    {doc.name}
-                  </span>
-                </div>
-              ))
-            )}
+        <aside className="w-64 bg-white shadow-sm border-r p-4 space-y-6">
+          {/* Documents Section */}
+          <div>
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Documents</h2>
+            <div className="space-y-2">
+              {documents.length === 0 ? (
+                <p className="text-gray-600 text-sm">No documents uploaded yet</p>
+              ) : (
+                documents.map((doc, index) => (
+                  <div key={index} className="flex items-center space-x-2 p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <DocumentTextIcon className="h-4 w-4 text-gray-700" />
+                    <span className="text-sm text-gray-900 truncate font-medium" title={doc.name}>
+                      {doc.name}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
+
+          {/* Evaluation Metrics Section */}
+          {showEvaluation && evaluationSummary && (
+            <div>
+              <h2 className="text-lg font-medium text-gray-900 mb-4">Evaluation Metrics</h2>
+              
+              {/* Overall Stats */}
+              <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                <div className="text-xs text-gray-500 mb-1">Total Evaluations</div>
+                <div className="text-lg font-semibold text-gray-900">{evaluationSummary.total_evaluations}</div>
+                <div className="text-xs text-gray-600 mt-1">Trend: {evaluationSummary.recent_trend}</div>
+              </div>
+
+              {/* Recent Metrics */}
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-gray-700 mb-2">Recent Scores</div>
+                {Object.entries(evaluationSummary.recent_scores || {}).map(([metric, score]) => (
+                  <div key={metric} className="flex items-center justify-between">
+                    <span className="text-xs text-gray-600 capitalize">{metric}</span>
+                    <span className={`text-xs font-medium px-2 py-1 rounded ${getScoreBgColor(score)} ${getScoreColor(score)}`}>
+                      {(score * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </aside>
 
         {/* Main Chat Area */}
@@ -394,6 +489,29 @@ export default function Home() {
                     }`}
                   >
                     <div className="whitespace-pre-wrap text-base leading-relaxed">{message.content}</div>
+                    
+                    {/* Evaluation Metrics */}
+                    {showEvaluation && message.evaluation && message.role === 'assistant' && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs text-gray-600 font-medium">Quality Score:</p>
+                          <span className={`text-xs font-semibold px-2 py-1 rounded ${getScoreBgColor(message.evaluation.overall_score)} ${getScoreColor(message.evaluation.overall_score)}`}>
+                            {(message.evaluation.overall_score * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1 text-xs">
+                          {Object.entries(message.evaluation.metrics).map(([metric, data]) => (
+                            <div key={metric} className="flex justify-between">
+                              <span className="text-gray-600 capitalize">{metric}:</span>
+                              <span className={`font-medium ${getScoreColor(data.score)}`}>
+                                {(data.score * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
                     {message.sources && message.sources.length > 0 && (
                       <div className="mt-2 pt-2 border-t border-gray-200">
                         <p className="text-xs text-gray-600 mb-1 font-medium">Sources:</p>

@@ -2,6 +2,7 @@ import os
 from typing import List, Dict
 import openai
 from services.document_service import DocumentService
+from services.evaluation_service import EvaluationService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -10,6 +11,7 @@ class ChatService:
     def __init__(self):
         self.openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.document_service = DocumentService()
+        self.evaluation_service = EvaluationService()
         
     async def generate_response(self, message: str, conversation_history: List[Dict] = None) -> Dict:
         """Generate a response using RAG"""
@@ -62,9 +64,26 @@ class ChatService:
                 temperature=0.7
             )
             
+            response_text = response.choices[0].message.content
+            
+            # Evaluate the response if we have contexts
+            evaluation_results = None
+            if relevant_chunks:
+                try:
+                    retrieved_contexts = [chunk['text'] for chunk in relevant_chunks]
+                    evaluation_results = await self.evaluation_service.evaluate_response(
+                        query=message,
+                        response=response_text,
+                        retrieved_contexts=retrieved_contexts,
+                        sources=sources
+                    )
+                except Exception as e:
+                    logger.error(f"Error during evaluation: {str(e)}")
+            
             return {
-                "response": response.choices[0].message.content,
-                "sources": sources
+                "response": response_text,
+                "sources": sources,
+                "evaluation": evaluation_results
             }
             
         except Exception as e:

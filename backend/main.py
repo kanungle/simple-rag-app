@@ -3,6 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
+from typing import List, Dict, Optional
+import logging
+from datetime import datetime
+
+from services.document_service import DocumentService
+from services.chat_service import ChatService
 from typing import List
 import logging
 from datetime import datetime
@@ -39,6 +45,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     sources: List[str]
+    evaluation: Optional[Dict] = None
 
 @app.on_event("startup")
 async def startup_event():
@@ -125,6 +132,26 @@ async def delete_document(document_name: str):
     except Exception as e:
         logger.error(f"Error deleting document: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error deleting document: {str(e)}")
+
+@app.get("/evaluation/summary")
+async def get_evaluation_summary():
+    """Get evaluation metrics summary"""
+    try:
+        summary = chat_service.evaluation_service.get_evaluation_summary()
+        return summary
+    except Exception as e:
+        logger.error(f"Error getting evaluation summary: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting evaluation summary: {str(e)}")
+
+@app.get("/evaluation/history")
+async def get_evaluation_history(limit: int = 20):
+    """Get recent evaluation history"""
+    try:
+        history = chat_service.evaluation_service.evaluation_history[-limit:] if chat_service.evaluation_service.evaluation_history else []
+        return {"evaluations": history}
+    except Exception as e:
+        logger.error(f"Error getting evaluation history: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting evaluation history: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

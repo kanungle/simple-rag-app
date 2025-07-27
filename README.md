@@ -12,6 +12,9 @@ A Retrieval Augmented Generation (RAG) chat application that allows users to upl
 - 📊 **Status Indicators**: Real-time backend and database connection status
 - 🔄 **Progress Tracking**: Visual upload and processing progress bars
 - ⚡ **Health Monitoring**: Automatic system health checks every 30 seconds
+- 📈 **RAG Evaluation**: Comprehensive evaluation metrics for response quality
+- 🎯 **Quality Scoring**: Real-time scoring of relevance, faithfulness, completeness, and clarity
+- 📊 **Metrics Dashboard**: Visual evaluation metrics in the UI with historical trends
 
 ## Architecture
 
@@ -21,6 +24,18 @@ A Retrieval Augmented Generation (RAG) chat application that allows users to upl
 - **Embeddings**: OpenAI text-embedding-ada-002 (1536 dimensions)
 - **LLM**: OpenAI GPT models
 - **PDF Processing**: PyPDF2
+- **Evaluation**: Custom RAG evaluation system with multiple metrics
+
+## Evaluation Metrics
+
+The application includes comprehensive RAG evaluation with the following metrics:
+
+- **Relevance** (0-1): How well the response addresses the user's query
+- **Faithfulness** (0-1): Whether the response is grounded in the retrieved context
+- **Completeness** (0-1): How thoroughly the response covers all aspects of the query
+- **Clarity** (0-1): How clear and well-structured the response is
+- **Retrieval Quality** (0-1): Quality and diversity of retrieved contexts
+- **Overall Score** (0-1): Average of all metrics
 
 ## Prerequisites
 
@@ -105,6 +120,24 @@ You can modify the following environment variables in `backend/.env`:
 - `CHUNK_OVERLAP` - Overlap between chunks (default: 200)
 
 ## Development
+
+### Using Evaluation Features
+
+The application includes real-time evaluation of RAG responses:
+
+1. **Enable Metrics**: Click the "📊 Metrics" button in the header to show evaluation data
+2. **View Response Scores**: Each assistant response shows quality scores when metrics are enabled
+3. **Check Summary**: The sidebar displays overall evaluation statistics and trends
+4. **API Endpoints**: 
+   - `GET /evaluation/summary` - Get evaluation metrics summary
+   - `GET /evaluation/history` - Get recent evaluation history
+
+### Testing Evaluation System
+
+```bash
+# Run the evaluation test script
+python test_evaluation.py
+```
 
 ### Backend Development
 
