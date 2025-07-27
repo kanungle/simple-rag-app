@@ -90,15 +90,34 @@ The Next.js frontend will start on http://localhost:3000.
 
 1. **Start all services**: Make sure Qdrant, the FastAPI backend, and Next.js frontend are all running
 2. **Upload PDFs**: Click the "Upload PDF" button in the top right to upload your documents
-3. **Ask questions**: Type your questions in the chat interface
-4. **View sources**: See which documents were used to answer your questions
+3. **Enable evaluation (optional)**: Click the "Metrics" button to enable RAG evaluation for quality assessment
+4. **Ask questions**: Type your questions in the chat interface
+5. **View sources**: See which documents were used to answer your questions
+6. **Review metrics**: When evaluation is enabled, view quality scores for each response and overall trends in the sidebar
+
+### Evaluation Features
+
+The RAG evaluation system provides detailed quality assessment:
+
+- **Individual Message Scores**: Each response shows scores for all 5 metrics when evaluation is enabled
+- **Overall Score**: Combined score across all metrics for quick quality assessment
+- **Evaluation Summary**: Sidebar shows total evaluations, average scores, and recent trends
+- **Color-coded Indicators**: Visual representation of score quality (red: 0-0.4, yellow: 0.4-0.7, green: 0.7-1.0)
+- **Historical Tracking**: System maintains evaluation history for trend analysis
 
 ## API Endpoints
 
-- `POST /upload-pdf` - Upload and process a PDF file
+### Chat and Documents
 - `POST /chat` - Send a chat message and get a response with sources
+  - Optional `evaluate: boolean` parameter to enable evaluation
+- `POST /upload-pdf` - Upload and process a PDF file
 - `GET /documents` - List all processed documents
 - `DELETE /documents/{document_name}` - Delete a document and its chunks
+- `GET /health` - System health check endpoint
+
+### Evaluation Endpoints
+- `GET /evaluation/summary` - Get evaluation metrics summary and trends
+- `GET /evaluation/history` - Get detailed evaluation history
 
 ## Configuration
 
