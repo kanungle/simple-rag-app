@@ -11,16 +11,55 @@ import {
   ExclamationTriangleIcon,
   XCircleIcon,
   SignalIcon,
-  ClockIcon
+  ClockIcon,
+  ChartBarIcon,
+  StarIcon
 } from '@heroicons/react/24/outline'
 import axios from 'axios'
 
 const API_BASE_URL = 'http://localhost:8000'
 
+interface EvaluationMetrics {
+  relevance: { score: number; description: string }
+  faithfulness: { score: number; description: string }
+  completeness: { score: number; description: string }
+  clarity: { score: number; description: string }
+  retrieval: { score: number; description: string }
+}
+
+interface EvaluationData {
+  timestamp: string
+  metrics: EvaluationMetrics
+  overall_score: number
+}
+
 interface Message {
   role: 'user' | 'assistant'
   content: string
   sources?: string[]
+  evaluation?: EvaluationData
+}
+
+interface EvaluationSummary {
+  total_evaluations: number
+  average_scores: {
+    relevance: number
+    faithfulness: number
+    completeness: number
+    clarity: number
+    retrieval: number
+    overall: number
+  }
+  recent_scores: {
+    relevance: number
+    faithfulness: number
+    completeness: number
+    clarity: number
+    retrieval: number
+    overall: number
+  }
+  recent_trend: string
+  last_evaluation: string | null
 }
 
 interface Document {
@@ -56,6 +95,8 @@ export default function Home() {
     progress: 0,
     message: ''
   })
+  const [showEvaluation, setShowEvaluation] = useState(false)
+  const [evaluationSummary, setEvaluationSummary] = useState<EvaluationSummary | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -70,6 +111,7 @@ export default function Home() {
   useEffect(() => {
     checkSystemStatus()
     fetchDocuments()
+    fetchEvaluationSummary()
     // Check system status every 30 seconds
     const interval = setInterval(checkSystemStatus, 30000)
     return () => clearInterval(interval)
@@ -103,6 +145,15 @@ export default function Home() {
       setDocuments(response.data.documents.map((name: string) => ({ name, chunks: 0 })))
     } catch (error) {
       console.error('Error fetching documents:', error)
+    }
+  }
+
+  const fetchEvaluationSummary = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/evaluation/summary`)
+      setEvaluationSummary(response.data)
+    } catch (error) {
+      console.error('Error fetching evaluation summary:', error)
     }
   }
 
@@ -211,16 +262,23 @@ export default function Home() {
         conversation_history: messages.slice(-5).map(msg => ({
           role: msg.role,
           content: msg.content
-        }))
+        })),
+        evaluate: showEvaluation
       })
 
       const assistantMessage: Message = {
         role: 'assistant',
         content: response.data.response,
-        sources: response.data.sources
+        sources: response.data.sources,
+        evaluation: response.data.evaluation
       }
 
       setMessages(prev => [...prev, assistantMessage])
+      
+      // Refresh evaluation summary if evaluation was performed
+      if (showEvaluation && response.data.evaluation) {
+        fetchEvaluationSummary()
+      }
     } catch (error: any) {
       const errorMessage: Message = {
         role: 'assistant',
@@ -259,6 +317,22 @@ export default function Home() {
       default:
         return 'bg-blue-500'
     }
+  }
+
+  const getScoreColor = (score: number) => {
+    if (score >= 0.8) return 'text-green-600'
+    if (score >= 0.6) return 'text-yellow-600'
+    return 'text-red-600'
+  }
+
+  const getScoreBadgeColor = (score: number) => {
+    if (score >= 0.8) return 'bg-green-100 text-green-800'
+    if (score >= 0.6) return 'bg-yellow-100 text-yellow-800'
+    return 'bg-red-100 text-red-800'
+  }
+
+  const formatScore = (score: number) => {
+    return (score * 100).toFixed(0) + '%'
   }
 
   return (
@@ -310,6 +384,19 @@ export default function Home() {
             </div>
             
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setShowEvaluation(!showEvaluation)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  showEvaluation 
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <ChartBarIcon className="h-4 w-4" />
+                <span>Metrics</span>
+                {showEvaluation && <span className="text-xs bg-green-200 px-1 rounded">ON</span>}
+              </button>
+              
               <input
                 ref={fileInputRef}
                 type="file"
@@ -354,7 +441,7 @@ export default function Home() {
         {/* Sidebar */}
         <aside className="w-64 bg-white shadow-sm border-r p-4">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Documents</h2>
-          <div className="space-y-2">
+          <div className="space-y-2 mb-6">
             {documents.length === 0 ? (
               <p className="text-gray-600 text-sm">No documents uploaded yet</p>
             ) : (
@@ -368,6 +455,60 @@ export default function Home() {
               ))
             )}
           </div>
+
+          {/* Evaluation Summary */}
+          {showEvaluation && evaluationSummary && (
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+                <ChartBarIcon className="h-4 w-4 mr-2 text-blue-600" />
+                Evaluation Summary
+              </h3>
+              
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Total Evaluations:</span>
+                  <span className="font-medium text-gray-900">{evaluationSummary.total_evaluations}</span>
+                </div>
+                
+                {evaluationSummary.total_evaluations > 0 && (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Overall Score:</span>
+                      <span className={`font-bold ${getScoreColor(evaluationSummary.average_scores.overall)}`}>
+                        {formatScore(evaluationSummary.average_scores.overall)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Trend:</span>
+                      <span className={`font-medium ${
+                        evaluationSummary.recent_trend === 'Improving' ? 'text-green-600' : 
+                        evaluationSummary.recent_trend === 'Declining' ? 'text-red-600' : 
+                        'text-gray-600'
+                      }`}>
+                        {evaluationSummary.recent_trend}
+                      </span>
+                    </div>
+                    
+                    <div className="mt-3 space-y-1">
+                      <p className="text-gray-700 font-medium text-xs">Recent Metrics:</p>
+                      {Object.entries(evaluationSummary.recent_scores).map(([metric, score]) => {
+                        if (metric === 'overall') return null
+                        return (
+                          <div key={metric} className="flex justify-between items-center">
+                            <span className="text-gray-600 capitalize">{metric}:</span>
+                            <span className={`font-medium ${getScoreColor(score as number)}`}>
+                              {formatScore(score as number)}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </aside>
 
         {/* Main Chat Area */}
@@ -394,6 +535,33 @@ export default function Home() {
                     }`}
                   >
                     <div className="whitespace-pre-wrap text-base leading-relaxed">{message.content}</div>
+                    
+                    {/* Evaluation Metrics */}
+                    {message.evaluation && showEvaluation && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs text-gray-600 font-medium flex items-center">
+                            <StarIcon className="h-3 w-3 mr-1" />
+                            Evaluation Metrics
+                          </p>
+                          <span className={`text-xs font-bold px-2 py-1 rounded ${getScoreBadgeColor(message.evaluation.overall_score)}`}>
+                            Overall: {formatScore(message.evaluation.overall_score)}
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-1 text-xs">
+                          {Object.entries(message.evaluation.metrics).map(([metric, data]) => (
+                            <div key={metric} className="flex justify-between items-center">
+                              <span className="text-gray-600 capitalize">{metric}:</span>
+                              <span className={`font-medium ${getScoreColor(data.score)}`}>
+                                {formatScore(data.score)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
                     {message.sources && message.sources.length > 0 && (
                       <div className="mt-2 pt-2 border-t border-gray-200">
                         <p className="text-xs text-gray-600 mb-1 font-medium">Sources:</p>

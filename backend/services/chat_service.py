@@ -2,6 +2,7 @@ import os
 from typing import List, Dict
 import openai
 from services.document_service import DocumentService
+from services.evaluation_service import EvaluationService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -10,8 +11,9 @@ class ChatService:
     def __init__(self):
         self.openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.document_service = DocumentService()
+        self.evaluation_service = EvaluationService()
         
-    async def generate_response(self, message: str, conversation_history: List[Dict] = None) -> Dict:
+    async def generate_response(self, message: str, conversation_history: List[Dict] = None, evaluate: bool = False) -> Dict:
         """Generate a response using RAG"""
         try:
             # Search for relevant documents
@@ -20,11 +22,13 @@ class ChatService:
             # Prepare context from retrieved chunks
             context = ""
             sources = []
+            contexts_text = []
             
             if relevant_chunks:
                 context = "Based on the following relevant information:\n\n"
                 for i, chunk in enumerate(relevant_chunks):
                     context += f"Source {i+1} ({chunk['source']}):\n{chunk['text']}\n\n"
+                    contexts_text.append(chunk['text'])
                     if chunk['source'] not in sources:
                         sources.append(chunk['source'])
             
@@ -62,10 +66,28 @@ class ChatService:
                 temperature=0.7
             )
             
-            return {
-                "response": response.choices[0].message.content,
+            response_text = response.choices[0].message.content
+            
+            result = {
+                "response": response_text,
                 "sources": sources
             }
+            
+            # Add evaluation if requested
+            if evaluate and contexts_text:
+                try:
+                    evaluation = await self.evaluation_service.evaluate_response(
+                        query=message,
+                        response=response_text,
+                        retrieved_contexts=contexts_text,
+                        sources=sources
+                    )
+                    result["evaluation"] = evaluation
+                except Exception as e:
+                    logger.error(f"Error during evaluation: {str(e)}")
+                    result["evaluation"] = {"error": str(e)}
+            
+            return result
             
         except Exception as e:
             logger.error(f"Error generating response: {str(e)}")

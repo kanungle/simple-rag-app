@@ -35,10 +35,12 @@ chat_service = ChatService()
 class ChatRequest(BaseModel):
     message: str
     conversation_history: List[dict] = []
+    evaluate: bool = False
 
 class ChatResponse(BaseModel):
     response: str
     sources: List[str]
+    evaluation: dict = None
 
 @app.on_event("startup")
 async def startup_event():
@@ -99,7 +101,8 @@ async def chat(request: ChatRequest):
     try:
         response = await chat_service.generate_response(
             request.message, 
-            request.conversation_history
+            request.conversation_history,
+            request.evaluate
         )
         return response
     except Exception as e:
@@ -125,6 +128,26 @@ async def delete_document(document_name: str):
     except Exception as e:
         logger.error(f"Error deleting document: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error deleting document: {str(e)}")
+
+@app.get("/evaluation/summary")
+async def get_evaluation_summary():
+    """Get evaluation metrics summary"""
+    try:
+        summary = chat_service.evaluation_service.get_evaluation_summary()
+        return summary
+    except Exception as e:
+        logger.error(f"Error getting evaluation summary: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting evaluation summary: {str(e)}")
+
+@app.get("/evaluation/history")
+async def get_evaluation_history():
+    """Get evaluation history"""
+    try:
+        history = chat_service.evaluation_service.evaluation_history
+        return {"history": history}
+    except Exception as e:
+        logger.error(f"Error getting evaluation history: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting evaluation history: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
