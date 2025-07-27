@@ -20,6 +20,14 @@ A Retrieval Augmented Generation (RAG) chat application that allows users to upl
   - **Retrieval Quality**: Quality and diversity of retrieved contexts
 - 🎛️ **Metrics Toggle**: Enable/disable evaluation for each chat interaction
 - 📊 **Evaluation Dashboard**: View evaluation summary and trends in the sidebar
+- 📚 **Document CRUD Management**: Complete document lifecycle management
+  - **Create**: Upload and process PDF documents with detailed metadata
+  - **Read**: View comprehensive document details, statistics, and chunk previews
+  - **Update**: Modify document metadata and properties
+  - **Delete**: Remove documents and all associated chunks with confirmation
+- 📋 **Document Statistics**: Real-time overview of collection statistics
+- 🔍 **Document Details Modal**: In-depth view of document structure and chunks
+- 💾 **Enhanced Metadata**: File size, page count, processing date, and chunk information
 
 ## Architecture
 
@@ -90,10 +98,28 @@ The Next.js frontend will start on http://localhost:3000.
 
 1. **Start all services**: Make sure Qdrant, the FastAPI backend, and Next.js frontend are all running
 2. **Upload PDFs**: Click the "Upload PDF" button in the top right to upload your documents
-3. **Enable evaluation (optional)**: Click the "Metrics" button to enable RAG evaluation for quality assessment
-4. **Ask questions**: Type your questions in the chat interface
-5. **View sources**: See which documents were used to answer your questions
-6. **Review metrics**: When evaluation is enabled, view quality scores for each response and overall trends in the sidebar
+3. **Manage documents**: Use the enhanced document sidebar to:
+   - View document statistics and metadata
+   - Click "View" to see detailed document information and chunk previews
+   - Click "Delete" to remove documents (with confirmation)
+4. **Enable evaluation (optional)**: Click the "Metrics" button to enable RAG evaluation for quality assessment
+5. **Ask questions**: Type your questions in the chat interface
+6. **View sources**: See which documents were used to answer your questions
+7. **Review metrics**: When evaluation is enabled, view quality scores for each response and overall trends in the sidebar
+
+### Document Management Features
+
+The enhanced document management system provides:
+
+- **Document Statistics**: Real-time overview showing total documents, chunks, file sizes, and text length
+- **Detailed Document Cards**: Each document shows file size, page count, chunk information, and processing date
+- **Document Details Modal**: Click "View" on any document to see:
+  - Complete metadata (filename, size, pages, processing date)
+  - Chunk statistics and distribution
+  - Preview of document chunks with text snippets
+  - Individual chunk information (index, length, creation date)
+- **Safe Deletion**: Delete documents with confirmation dialog
+- **Automatic Refresh**: Statistics and document list update automatically after uploads/deletions
 
 ### Evaluation Features
 
@@ -111,8 +137,11 @@ The RAG evaluation system provides detailed quality assessment:
 - `POST /chat` - Send a chat message and get a response with sources
   - Optional `evaluate: boolean` parameter to enable evaluation
 - `POST /upload-pdf` - Upload and process a PDF file
-- `GET /documents` - List all processed documents
+- `GET /documents` - List all documents with detailed metadata
+- `GET /documents/{document_name}` - Get detailed information about a specific document
+- `PUT /documents/{document_name}/metadata` - Update metadata for a document
 - `DELETE /documents/{document_name}` - Delete a document and its chunks
+- `GET /documents/statistics/overview` - Get overall collection statistics
 - `GET /health` - System health check endpoint
 
 ### Evaluation Endpoints
